@@ -32,6 +32,8 @@ import {
   VideoCaptureOptions,
   Track,
   facingModeFromLocalTrack,
+  LocalVideoTrack,
+  LocalAudioTrack,
 } from 'livekit-client';
 import { useRouter } from 'next/navigation';
 import { useSetupE2EE } from '@/lib/useSetupE2EE';
