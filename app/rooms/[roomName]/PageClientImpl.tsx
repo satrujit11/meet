@@ -379,13 +379,41 @@ export function PreJoin({
     }
   }
 
-  const [isSmall, setIsSmall] = React.useState(window.innerWidth < 768);
+  const [isSmall, setIsSmall] = React.useState(false);
+  const [autoJoinSeconds, setAutoJoinSeconds] = React.useState(0);
 
   React.useEffect(() => {
     const handleResize = () => setIsSmall(window.innerWidth < 768);
+    handleResize(); // initialize on mount
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  React.useEffect(() => {
+    if (isValid) {
+
+      setAutoJoinSeconds(5); // start countdown from 5 seconds
+      const interval = setInterval(() => {
+        setAutoJoinSeconds((prev) => {
+          if (prev <= 1) {
+            clearInterval(interval);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      const timer = setTimeout(() => {
+        handleSubmit(new Event('auto-submit') as unknown as React.FormEvent);
+        setAutoJoinSeconds(0);
+      }, 5000);
+
+      return () => {
+        clearInterval(interval);
+        clearTimeout(timer);
+      };
+    }
+  }, [isValid]);
 
 
   return (
@@ -497,7 +525,9 @@ export function PreJoin({
             onClick={handleSubmit}
             disabled={!isValid}
           >
-            {joinLabel}
+            {isValid ?
+              `Auto Joining in ${autoJoinSeconds} seconds` :
+              'Join Room'}
           </button>
         </form>
       </div>
