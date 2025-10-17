@@ -62,7 +62,7 @@ export function PageClientImpl(props: {
     setPreJoinChoices(values);
     const url = new URL(CONN_DETAILS_ENDPOINT, window.location.origin);
     url.searchParams.append('roomName', props.roomName);
-    url.searchParams.append('participantName', props.username ?? values.username);
+    url.searchParams.append('participantName', values.username);
     if (props.region) {
       url.searchParams.append('region', props.region);
     }
