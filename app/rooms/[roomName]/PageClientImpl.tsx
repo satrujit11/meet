@@ -10,8 +10,13 @@ import { ConnectionDetails } from '@/lib/types';
 import {
   formatChatMessageLinks,
   LocalUserChoices,
-  PreJoin,
+  MediaDeviceMenu,
+  ParticipantPlaceholder,
+  PreJoinProps,
   RoomContext,
+  TrackToggle,
+  usePersistentUserChoices,
+  usePreviewTracks,
   VideoConference,
 } from '@livekit/components-react';
 import {
@@ -25,6 +30,8 @@ import {
   RoomEvent,
   TrackPublishDefaults,
   VideoCaptureOptions,
+  Track,
+  facingModeFromLocalTrack,
 } from 'livekit-client';
 import { useRouter } from 'next/navigation';
 import { useSetupE2EE } from '@/lib/useSetupE2EE';
@@ -237,3 +244,275 @@ function VideoConferenceComponent(props: {
     </div>
   );
 }
+
+
+export function PreJoin({
+  defaults = {},
+  onValidate,
+  onSubmit,
+  onError,
+  debug,
+  joinLabel = 'Join Room',
+  micLabel = 'Microphone',
+  camLabel = 'Camera',
+  userLabel = 'Username',
+  persistUserChoices = true,
+  videoProcessor,
+  ...htmlProps
+}: PreJoinProps) {
+  const {
+    userChoices: initialUserChoices,
+    saveAudioInputDeviceId,
+    saveAudioInputEnabled,
+    saveVideoInputDeviceId,
+    saveVideoInputEnabled,
+    saveUsername,
+  } = usePersistentUserChoices({
+    defaults,
+    preventSave: !persistUserChoices,
+    preventLoad: !persistUserChoices,
+  });
+
+  const [userChoices, setUserChoices] = React.useState(initialUserChoices);
+
+  // Initialize device settings
+  const [audioEnabled, setAudioEnabled] = React.useState<boolean>(userChoices.audioEnabled);
+  const [videoEnabled, setVideoEnabled] = React.useState<boolean>(userChoices.videoEnabled);
+  const [audioDeviceId, setAudioDeviceId] = React.useState<string>(userChoices.audioDeviceId);
+  const [videoDeviceId, setVideoDeviceId] = React.useState<string>(userChoices.videoDeviceId);
+  const [username, setUsername] = React.useState(userChoices.username);
+
+  // Save user choices to persistent storage.
+  React.useEffect(() => {
+    saveAudioInputEnabled(audioEnabled);
+  }, [audioEnabled, saveAudioInputEnabled]);
+  React.useEffect(() => {
+    saveVideoInputEnabled(videoEnabled);
+  }, [videoEnabled, saveVideoInputEnabled]);
+  React.useEffect(() => {
+    saveAudioInputDeviceId(audioDeviceId);
+  }, [audioDeviceId, saveAudioInputDeviceId]);
+  React.useEffect(() => {
+    saveVideoInputDeviceId(videoDeviceId);
+  }, [videoDeviceId, saveVideoInputDeviceId]);
+  React.useEffect(() => {
+    saveUsername(username);
+  }, [username, saveUsername]);
+
+  const tracks = usePreviewTracks(
+    {
+      audio: audioEnabled ? { deviceId: initialUserChoices.audioDeviceId } : false,
+      video: videoEnabled
+        ? { deviceId: initialUserChoices.videoDeviceId, processor: videoProcessor }
+        : false,
+    },
+    onError,
+  );
+
+  const videoEl = React.useRef(null);
+
+  const videoTrack = React.useMemo(
+    () => tracks?.filter((track) => track.kind === Track.Kind.Video)[0] as LocalVideoTrack,
+    [tracks],
+  );
+
+  const facingMode = React.useMemo(() => {
+    if (videoTrack) {
+      const { facingMode } = facingModeFromLocalTrack(videoTrack);
+      return facingMode;
+    } else {
+      return 'undefined';
+    }
+  }, [videoTrack]);
+
+  const audioTrack = React.useMemo(
+    () => tracks?.filter((track) => track.kind === Track.Kind.Audio)[0] as LocalAudioTrack,
+    [tracks],
+  );
+
+  React.useEffect(() => {
+    if (videoEl.current && videoTrack) {
+      videoTrack.unmute();
+      videoTrack.attach(videoEl.current);
+    }
+
+    return () => {
+      videoTrack?.detach();
+    };
+  }, [videoTrack]);
+
+  const [isValid, setIsValid] = React.useState<boolean>();
+
+  const handleValidation = React.useCallback(
+    (values: LocalUserChoices) => {
+      if (typeof onValidate === 'function') {
+        return onValidate(values);
+      } else {
+        return values.username !== '';
+      }
+    },
+    [onValidate],
+  );
+
+  React.useEffect(() => {
+    const newUserChoices = {
+      username,
+      videoEnabled,
+      videoDeviceId,
+      audioEnabled,
+      audioDeviceId,
+    };
+    setUserChoices(newUserChoices);
+    setIsValid(handleValidation(newUserChoices));
+  }, [username, videoEnabled, handleValidation, audioEnabled, audioDeviceId, videoDeviceId]);
+
+  function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    if (handleValidation(userChoices)) {
+      if (typeof onSubmit === 'function') {
+        onSubmit(userChoices);
+      }
+    } else {
+      console.log('Validation failed with: ', userChoices);
+    }
+  }
+
+  const [isSmall, setIsSmall] = React.useState(window.innerWidth < 768);
+
+  React.useEffect(() => {
+    const handleResize = () => setIsSmall(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+
+  return (
+    <div
+      className="lk-prejoin"
+      style={{
+        boxSizing: 'border-box',
+        display: 'flex',
+        flexDirection: isSmall ? 'column' : 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '1rem',
+        gap: '1rem',
+        marginInline: 'auto',
+        backgroundColor: 'var(--lk-bg)',
+        width: '100%',
+        // You can uncomment and adjust these if needed:
+        // maxWidth: '480px',
+        // alignItems: 'stretch',
+      }}
+      {...htmlProps}
+    >
+      <div className="lk-video-container"
+        style={{
+          maxWidth: isSmall ? '100%' : '20rem',
+          width: '100%',
+          aspectRatio: '16/9',
+          backgroundColor: 'var(--lk-bg)',
+          borderRadius: '0.5rem',
+          overflow: 'hidden',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}
+      >
+        {videoTrack && (
+          <video ref={videoEl} width="1280" height="720" data-lk-facing-mode={facingMode} />
+        )}
+        {(!videoTrack || !videoEnabled) && (
+          <div className="lk-camera-off-note">
+            <ParticipantPlaceholder />
+          </div>
+        )}
+      </div>
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'stretch',
+          justifyContent: 'center',
+          width: isSmall ? '-webkit-fill-available' : 'auto',
+          gap: '1rem',
+        }}
+
+      >
+        <div className="lk-button-group-container">
+          <div className="lk-button-group audio">
+            <TrackToggle
+              initialState={audioEnabled}
+              source={Track.Source.Microphone}
+              onChange={(enabled) => setAudioEnabled(enabled)}
+            >
+              {micLabel}
+            </TrackToggle>
+            <div className="lk-button-group-menu">
+              <MediaDeviceMenu
+                initialSelection={audioDeviceId}
+                kind="audioinput"
+                disabled={!audioTrack}
+                tracks={{ audioinput: audioTrack }}
+                onActiveDeviceChange={(_, id) => setAudioDeviceId(id)}
+              />
+            </div>
+          </div>
+          <div className="lk-button-group video">
+            <TrackToggle
+              initialState={videoEnabled}
+              source={Track.Source.Camera}
+              onChange={(enabled) => setVideoEnabled(enabled)}
+            >
+              {camLabel}
+            </TrackToggle>
+            <div className="lk-button-group-menu">
+              <MediaDeviceMenu
+                initialSelection={videoDeviceId}
+                kind="videoinput"
+                disabled={!videoTrack}
+                tracks={{ videoinput: videoTrack }}
+                onActiveDeviceChange={(_, id) => setVideoDeviceId(id)}
+              />
+            </div>
+          </div>
+        </div>
+
+        <form className="lk-username-container">
+          <input
+            className="lk-form-control"
+            id="username"
+            name="username"
+            type="text"
+            defaultValue={username}
+            placeholder={userLabel}
+            onChange={(inputEl) => setUsername(inputEl.target.value)}
+            autoComplete="off"
+          />
+          <button
+            className="lk-button lk-join-button"
+            type="submit"
+            onClick={handleSubmit}
+            disabled={!isValid}
+          >
+            {joinLabel}
+          </button>
+        </form>
+      </div>
+
+      {debug && (
+        <>
+          <strong>User Choices:</strong>
+          <ul className="lk-list" style={{ overflow: 'hidden', maxWidth: '15rem' }}>
+            <li>Username: {`${userChoices.username}`}</li>
+            <li>Video Enabled: {`${userChoices.videoEnabled}`}</li>
+            <li>Audio Enabled: {`${userChoices.audioEnabled}`}</li>
+            <li>Video Device: {`${userChoices.videoDeviceId}`}</li>
+            <li>Audio Device: {`${userChoices.audioDeviceId}`}</li>
+          </ul>
+        </>
+      )}
+    </div>
+  );
+}
+
