@@ -39,17 +39,21 @@ export function PageClientImpl(props: {
   region?: string;
   hq: boolean;
   codec: VideoCodec;
+  username?: string;
 }) {
+  console.log("Props from imp", props);
+
   const [preJoinChoices, setPreJoinChoices] = React.useState<LocalUserChoices | undefined>(
     undefined,
   );
   const preJoinDefaults = React.useMemo(() => {
+    console.log(props.username);
     return {
-      username: '',
+      username: props.username ?? '',
       videoEnabled: true,
       audioEnabled: true,
     };
-  }, []);
+  }, [props.username]);
   const [connectionDetails, setConnectionDetails] = React.useState<ConnectionDetails | undefined>(
     undefined,
   );
@@ -58,12 +62,13 @@ export function PageClientImpl(props: {
     setPreJoinChoices(values);
     const url = new URL(CONN_DETAILS_ENDPOINT, window.location.origin);
     url.searchParams.append('roomName', props.roomName);
-    url.searchParams.append('participantName', values.username);
+    url.searchParams.append('participantName', props.username ?? values.username);
     if (props.region) {
       url.searchParams.append('region', props.region);
     }
     const connectionDetailsResp = await fetch(url.toString());
     const connectionDetailsData = await connectionDetailsResp.json();
+    console.log(connectionDetailsData);
     setConnectionDetails(connectionDetailsData);
   }, []);
   const handlePreJoinError = React.useCallback((e: any) => console.error(e), []);
@@ -73,6 +78,7 @@ export function PageClientImpl(props: {
       {connectionDetails === undefined || preJoinChoices === undefined ? (
         <div style={{ display: 'grid', placeItems: 'center', height: '100%' }}>
           <PreJoin
+            persistUserChoices={false}
             defaults={preJoinDefaults}
             onSubmit={handlePreJoinSubmit}
             onError={handlePreJoinError}
@@ -220,34 +226,6 @@ function VideoConferenceComponent(props: {
   return (
     <div className="lk-room-container">
       <RoomContext.Provider value={room}>
-        <div
-          style={{
-            position: 'absolute',
-            bottom: '1rem',
-            left: '1rem',
-            zIndex: 9999,
-            backgroundColor: 'rgba(0,0,0,0.6)',
-            color: 'white',
-            padding: '0.5rem 1rem',
-            borderRadius: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-          }}
-        >
-          <span>Room ID: <strong>{props.connectionDetails.roomName}</strong></span>
-          <button
-            style={{
-              padding: '0.25rem 0.5rem',
-              fontSize: '0.875rem',
-              cursor: 'pointer',
-            }}
-            className="lk-button"
-            onClick={() => navigator.clipboard.writeText(props.connectionDetails.roomName)}
-          >
-            Copy
-          </button>
-        </div>
         <KeyboardShortcuts />
         <VideoConference
           chatMessageFormatter={formatChatMessageLinks}
