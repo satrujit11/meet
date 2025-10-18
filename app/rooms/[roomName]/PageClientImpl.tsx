@@ -275,6 +275,8 @@ export function PreJoin({
     preventLoad: !persistUserChoices,
   });
 
+  const router = useRouter();
+
   const [userChoices, setUserChoices] = React.useState(initialUserChoices);
 
   // Initialize device settings
@@ -379,8 +381,17 @@ export function PreJoin({
     }
   }
 
+  function handleBack(event: React.FormEvent) {
+    event.preventDefault();
+    router.push('/');
+  }
+
+
   const [isSmall, setIsSmall] = React.useState(false);
   const [autoJoinSeconds, setAutoJoinSeconds] = React.useState(0);
+  const autoJoinTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+  const countdownRef = React.useRef<NodeJS.Timeout | null>(null);
+  const [autoJoinCancelled, setAutoJoinCancelled] = React.useState(false);
 
   React.useEffect(() => {
     const handleResize = () => setIsSmall(window.innerWidth < 768);
@@ -390,30 +401,30 @@ export function PreJoin({
   }, []);
 
   React.useEffect(() => {
-    if (isValid) {
+    if (isValid && !autoJoinCancelled) {
+      setAutoJoinSeconds(5); // start countdown
 
-      setAutoJoinSeconds(5); // start countdown from 5 seconds
-      const interval = setInterval(() => {
+      countdownRef.current = setInterval(() => {
         setAutoJoinSeconds((prev) => {
           if (prev <= 1) {
-            clearInterval(interval);
+            clearInterval(countdownRef.current!);
             return 0;
           }
           return prev - 1;
         });
       }, 1000);
 
-      const timer = setTimeout(() => {
+      autoJoinTimerRef.current = setTimeout(() => {
         handleSubmit(new Event('auto-submit') as unknown as React.FormEvent);
         setAutoJoinSeconds(0);
       }, 5000);
 
       return () => {
-        clearInterval(interval);
-        clearTimeout(timer);
+        clearInterval(countdownRef.current!);
+        clearTimeout(autoJoinTimerRef.current!);
       };
     }
-  }, [isValid]);
+  }, [isValid, autoJoinCancelled]);
 
 
   return (
@@ -516,19 +527,50 @@ export function PreJoin({
             type="text"
             defaultValue={username}
             placeholder={userLabel}
-            onChange={(inputEl) => setUsername(inputEl.target.value)}
+            onChange={(inputEl) => {
+              setUsername(inputEl.target.value);
+
+              // Cancel auto join if user edits the username
+              if (!autoJoinCancelled) {
+                setAutoJoinCancelled(true);
+                setAutoJoinSeconds(0);
+                clearTimeout(autoJoinTimerRef.current!);
+                clearInterval(countdownRef.current!);
+              }
+            }}
             autoComplete="off"
           />
-          <button
-            className="lk-button lk-join-button"
-            type="submit"
-            onClick={handleSubmit}
-            disabled={!isValid}
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'row',
+              alignItems: 'stretch',
+              justifyContent: 'space-between',
+              width: isSmall ? '-webkit-fill-available' : 'auto',
+              gap: '1rem',
+            }}
           >
-            {isValid ?
-              `Auto Joining in ${autoJoinSeconds} seconds` :
-              'Join Room'}
-          </button>
+            <button
+              className="lk-button"
+              onClick={handleBack}
+              disabled={!isValid}
+              type="button"
+              style={{ width: '100%', color: 'var(--lk-text-color)' }}
+            >
+              Cancel
+            </button>
+            <button
+              className="lk-button lk-join-button"
+              type="submit"
+              onClick={handleSubmit}
+              disabled={!isValid}
+              style={{ width: '100%' }}
+            >
+              {isValid ?
+                autoJoinCancelled ? "Join Room" : `Auto Joining in ${autoJoinSeconds} seconds` :
+                'Join Room'}
+            </button>
+          </div>
         </form>
       </div>
 
