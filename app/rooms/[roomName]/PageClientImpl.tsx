@@ -175,6 +175,27 @@ function VideoConferenceComponent(props: {
   const connectOptions = React.useMemo((): RoomConnectOptions => {
     return {
       autoSubscribe: true,
+      rtcConfig: {
+        iceServers: [
+          {
+            urls: [
+              'stun:stun.l.google.com:19302',
+              'stun:stun1.l.google.com:19302',
+              'stun:stun2.l.google.com:19302',
+              'stun:stun3.l.google.com:19302',
+              'stun:stun4.l.google.com:19302',
+              'stun:stunserver.org:3478',
+            ],
+            username: 'livekit',
+            credential: 'secret',
+          },
+          {
+            urls: ["turns:relay.medcase.in:7881?transport=tcp"],
+            username: 'livekit',
+            credential: 'secret',
+          },
+        ],
+      }
     };
   }, []);
 
